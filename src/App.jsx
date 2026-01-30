@@ -11,23 +11,27 @@ import {
   Heart,
   TrendingUp,
   AlertTriangle,
-  Gift // Ícone novo para Bônus
+  Gift 
 } from 'lucide-react';
 
 /* --- CONFIGURAÇÕES GERAIS --- */
-const CHECKOUT_LINK = "https://go.hotmart.com/W103943255Y?ap=101e"; // COLOCAR_LINK_AQUI
-const WHATSAPP_NUMBER = "5532984212053"; // SEU NÚMERO AQUI (Apenas números)
-const VIDEO_SOURCE = "bg-loop.mp4"; // Certifique-se de ter este arquivo na pasta public
+const CHECKOUT_LINK = "https://go.hotmart.com/W103943255Y?ap=101e";
+const WHATSAPP_NUMBER = "5532984212053";
+const VIDEO_SOURCE = "bg-loop.mp4"; 
 
 const LandingPage = () => {
   // --- STATES ---
-  const [timeLeft, setTimeLeft] = useState(15 * 60); // 15 minutos em segundos
+  const [timeLeft, setTimeLeft] = useState(15 * 60);
   const [pixelFired, setPixelFired] = useState(false);
   const [faqOpen, setFaqOpen] = useState(null);
+  
+  // Controle de visibilidade dos botões
+  const [showStickyButton, setShowStickyButton] = useState(false); 
+  const [showWhatsapp, setShowWhatsapp] = useState(false); 
 
   // --- EFEITOS (HOOKS) ---
 
-  // 1. Timer Regressivo (Escassez)
+  // 1. Timer Regressivo
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
@@ -41,13 +45,50 @@ const LandingPage = () => {
     return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // 2. Rastreamento de Scroll (Pixel)
+  // 2. Scroll Logic (AQUI ESTÁ A MÁGICA DA SOBREPOSIÇÃO)
   useEffect(() => {
     const handleScroll = () => {
-      const scrollPercentage = (window.scrollY / (document.body.scrollHeight - window.innerHeight)) * 100;
+      const scrollY = window.scrollY;
+      const windowHeight = window.innerHeight;
       
+      // Identificadores das seções
+      const offerSection = document.getElementById('offer'); // Seção da Oferta
+      const faqSection = document.getElementById('faq');     // Seção do FAQ
+
+      // --- LÓGICA DO BOTÃO STICKY MOBILE ---
+      // Ele deve aparecer depois de 500px...
+      // MAS deve sumir se chegar na seção de Oferta (para não sobrepor)
+      let shouldShowSticky = false;
+
+      if (scrollY > 500) {
+        shouldShowSticky = true;
+      }
+
+      if (offerSection) {
+        // Se a parte de baixo da tela chegou no topo da seção de oferta (+ um ajuste de 100px para sumir antes de tocar)
+        if (scrollY + windowHeight > offerSection.offsetTop + 100) {
+           shouldShowSticky = false;
+        }
+      }
+
+      setShowStickyButton(shouldShowSticky);
+
+      // --- LÓGICA DO BOTÃO WHATSAPP ---
+      if (faqSection) {
+        const faqPosition = faqSection.offsetTop;
+        if (scrollY + windowHeight > faqPosition + 100) {
+          setShowWhatsapp(true);
+        } else {
+          setShowWhatsapp(false);
+        }
+      }
+
+      // --- PIXEL DE SCROLL 50% ---
+      const scrollPercentage = (scrollY / (document.body.scrollHeight - windowHeight)) * 100;
       if (scrollPercentage > 50 && !pixelFired) {
-        window.fbq('trackCustom', 'Interesse_Scroll_50'); 
+        if (typeof window.fbq === 'function') {
+          window.fbq('trackCustom', 'Interesse_Scroll_50'); 
+        }
         setPixelFired(true);
       }
     };
@@ -56,18 +97,27 @@ const LandingPage = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [pixelFired]);
 
-  // 3. Função de Disparo de Compra
-  const handlePurchaseClick = () => {
-    console.log("💰 Pixel Evento: ClicouBotaoVenda");
-    window.fbq('track', 'InitiateCheckout'); 
+  // --- FUNÇÕES DE RASTREAMENTO ---
+
+  const handlePurchaseClick = (origin) => {
+    console.log(`💰 Pixel Evento: InitiateCheckout | Origem: ${origin}`);
+    if (typeof window.fbq === 'function') {
+      window.fbq('track', 'InitiateCheckout', { content_name: origin }); 
+    }
     window.location.href = CHECKOUT_LINK;
+  };
+
+  const handleWhatsAppClick = () => {
+    console.log("💬 Pixel Evento: Contact (WhatsApp)");
+    if (typeof window.fbq === 'function') {
+      window.fbq('track', 'Contact', { content_name: 'WhatsApp_FAQ' });
+    }
   };
 
   const toggleFaq = (index) => {
     setFaqOpen(faqOpen === index ? null : index);
   };
 
-  // --- VARIANTES DE ANIMAÇÃO (Framer Motion) ---
   const fadeInUp = {
     hidden: { opacity: 0, y: 40 },
     visible: { opacity: 1, y: 0, transition: { duration: 0.6 } }
@@ -76,7 +126,7 @@ const LandingPage = () => {
   return (
     <div className="font-sans text-gray-800 bg-rose-50/30 overflow-x-hidden">
       
-      {/* 1. HEADER DE AVISO (URGÊNCIA) */}
+      {/* 1. HEADER */}
       <div className="bg-gradient-to-r from-red-600 to-rose-600 text-white text-center py-2 px-4 font-bold text-sm md:text-base sticky top-0 z-50 shadow-md">
         <motion.div 
           animate={{ opacity: [1, 0.7, 1] }} 
@@ -88,17 +138,13 @@ const LandingPage = () => {
         </motion.div>
       </div>
 
-      {/* 2. HERO SECTION (DOBRA PRINCIPAL) */}
+      {/* 2. HERO SECTION */}
       <section className="relative h-[90vh] min-h-[600px] flex items-center justify-center overflow-hidden">
-        {/* Vídeo de Fundo */}
         <div className="absolute inset-0 z-0">
-          <div className="absolute inset-0 bg-black/80 z-10"></div> {/* Overlay Escuro */}
+          <div className="absolute inset-0 bg-black/80 z-10"></div>
           <video 
             className="w-full h-full object-cover"
-            autoPlay 
-            loop 
-            muted 
-            playsInline
+            autoPlay loop muted playsInline
             poster="/placeholder-nails.jpg" 
           >
             <source src={VIDEO_SOURCE} type="video/mp4" />
@@ -106,11 +152,7 @@ const LandingPage = () => {
         </div>
 
         <div className="relative z-20 container mx-auto px-4 text-center text-white max-w-4xl">
-          <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={fadeInUp}
-          >
+          <motion.div initial="hidden" animate="visible" variants={fadeInUp}>
             <span className="inline-block py-1 px-3 rounded-full bg-rose-500/80 text-xs md:text-sm font-semibold tracking-wider mb-4 border border-rose-300">
               MÉTODO COMPROVADO
             </span>
@@ -121,16 +163,18 @@ const LandingPage = () => {
               O curso completo que vai te tirar do absoluto zero e te tornar uma <b className="text-rose-300">Manicure Profissional</b> disputada na sua cidade, mesmo sem material caro.
             </p>
             
+            {/* BOTÃO HERO */}
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               animate={{ boxShadow: ["0 0 0 rgba(225, 29, 72, 0.4)", "0 0 20px rgba(225, 29, 72, 0.7)", "0 0 0 rgba(225, 29, 72, 0.4)"] }}
               transition={{ duration: 2, repeat: Infinity }}
-              onClick={handlePurchaseClick}
+              onClick={() => handlePurchaseClick('Botao_Hero_Principal')}
               className="bg-gradient-to-r from-rose-600 to-pink-600 text-white font-bold py-4 px-8 rounded-full text-lg md:text-xl shadow-xl w-full md:w-auto uppercase tracking-wide border-b-4 border-rose-800"
             >
-              Quero Minha Independência
+              QUERO ME INSCREVER AGORA
             </motion.button>
+            
             <p className="mt-4 text-sm text-gray-300 flex items-center justify-center gap-1">
               <ShieldCheck size={16} className="text-green-400"/> Garantia de 7 Dias • Acesso Imediato
             </p>
@@ -138,14 +182,11 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* 3. A DOR (PROBLEMA) */}
+      {/* 3. A DOR */}
       <section className="py-20 bg-white">
         <div className="container mx-auto px-4">
           <motion.div 
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={fadeInUp}
+            initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp}
             className="text-center max-w-3xl mx-auto mb-12"
           >
             <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">Você se identifica com isso?</h2>
@@ -174,7 +215,6 @@ const LandingPage = () => {
               </motion.div>
             ))}
           </div>
-
           <div className="mt-12 bg-gray-900 text-white p-6 rounded-xl max-w-4xl mx-auto text-center shadow-xl">
             <p className="text-lg font-medium">
               ✨ <span className="text-amber-300 font-bold">A boa notícia:</span> O mercado da beleza é um dos únicos que cresce mesmo na crise. Mulheres não deixam de fazer as unhas. A oportunidade está na sua frente.
@@ -183,7 +223,7 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* 4. A SOLUÇÃO (O QUE VAI APRENDER + BÔNUS) */}
+      {/* 4. A SOLUÇÃO */}
       <section className="py-20 bg-rose-50">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
@@ -193,44 +233,24 @@ const LandingPage = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
             {[
-              "Cutilagem Funda Perfeita",
-              "Esmaltação em Gel Duradoura",
-              "Aplicação de Unhas de Fibra",
-              "Nail Art e Decoração 3D",
-              "Biossegurança e Higiene",
-              "Gestão e Marketing para Manicures"
+              "Cutilagem Funda Perfeita", "Esmaltação em Gel Duradoura", "Aplicação de Unhas de Fibra",
+              "Nail Art e Decoração 3D", "Biossegurança e Higiene", "Gestão e Marketing para Manicures"
             ].map((skill, idx) => (
-              <motion.div 
-                key={idx}
-                whileHover={{ y: -5 }}
-                className="flex items-center p-4 bg-white rounded-lg shadow-sm border-l-4 border-rose-500"
-              >
+              <motion.div key={idx} whileHover={{ y: -5 }} className="flex items-center p-4 bg-white rounded-lg shadow-sm border-l-4 border-rose-500">
                 <Check className="text-green-500 mr-3 flex-shrink-0" />
                 <span className="font-semibold text-gray-700">{skill}</span>
               </motion.div>
             ))}
-            
-            {/* Itens Bônus Inspirados na Concorrente */}
-             {[
-              "BÔNUS: Ficha de Anamnese",
-              "BÔNUS: Tabela de Precificação",
-              "BÔNUS: Lista de Fornecedores"
-            ].map((bonus, idx) => (
-              <motion.div 
-                key={`bonus-${idx}`}
-                whileHover={{ y: -5 }}
-                className="flex items-center p-4 bg-amber-50 rounded-lg shadow-sm border-l-4 border-amber-500"
-              >
+             {["BÔNUS: Ficha de Anamnese", "BÔNUS: Tabela de Precificação", "BÔNUS: Lista de Fornecedores"].map((bonus, idx) => (
+              <motion.div key={`bonus-${idx}`} whileHover={{ y: -5 }} className="flex items-center p-4 bg-amber-50 rounded-lg shadow-sm border-l-4 border-amber-500">
                 <Gift className="text-amber-500 mr-3 flex-shrink-0" />
                 <span className="font-bold text-gray-800">{bonus}</span>
               </motion.div>
             ))}
           </div>
 
-          {/* Destaque do Certificado */}
           <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            whileInView={{ opacity: 1, scale: 1 }}
+            initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }}
             className="mt-16 bg-white p-8 rounded-2xl shadow-lg border-2 border-amber-200 max-w-4xl mx-auto flex flex-col md:flex-row items-center gap-8 relative overflow-hidden"
           >
             <div className="absolute top-0 right-0 bg-amber-400 text-xs font-bold px-3 py-1 rounded-bl-lg">INCLUSO</div>
@@ -239,43 +259,28 @@ const LandingPage = () => {
                 <Award className="text-amber-500" size={32} />
                 <h3 className="text-2xl font-bold text-gray-800">Certificado Profissional</h3>
               </div>
-              <p className="text-gray-600">
-                Ao finalizar o curso, você recebe um Certificado de Conclusão válido em todo território nacional para expor no seu espaço e passar autoridade para suas clientes.
-              </p>
+              <p className="text-gray-600">Ao finalizar o curso, você recebe um Certificado de Conclusão válido em todo território nacional para expor no seu espaço e passar autoridade para suas clientes.</p>
             </div>
             <div className="w-full md:w-1/3 h-48 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-200 relative">
-               {/* Use uma imagem real do certificado aqui */}
                <img src="certificado.jpg" alt="Certificado" className="w-full h-full object-cover" />
             </div>
           </motion.div>
         </div>
       </section>
 
-      {/* 5. A INSTRUTORA (NOVA SEÇÃO - AUTORIDADE) */}
+      {/* 5. A INSTRUTORA */}
       <section className="py-20 bg-rose-100/50">
         <div className="container mx-auto px-4 flex flex-col md:flex-row items-center gap-12 max-w-6xl">
           <div className="w-full md:w-1/2">
-            {/* FOTO DA INSTRUTORA */}
             <div className="relative mx-auto w-64 md:w-80">
                 <div className="absolute inset-0 bg-rose-300 rounded-full transform translate-x-3 translate-y-3"></div>
-                <img 
-                    src="foto-instrutora.png" 
-                    alt="Foto da Instrutora" 
-                    className="relative rounded-full shadow-2xl border-4 border-white w-full h-full object-cover aspect-square"
-                />
+                <img src="foto-instrutora.png" alt="Foto da Instrutora" className="relative rounded-full shadow-2xl border-4 border-white w-full h-full object-cover aspect-square" />
             </div>
           </div>
           <div className="w-full md:w-1/2 text-center md:text-left">
             <span className="text-rose-500 font-bold tracking-widest text-sm uppercase">Sua Mentora</span>
-            <h2 className="text-3xl md:text-5xl font-bold text-gray-800 mb-6 mt-2">
-              Aprenda com quem é <span className="text-rose-600">Referência Nacional</span>
-            </h2>
-            <p className="text-gray-600 text-lg mb-6 leading-relaxed">
-              Com mais de <strong>5.000 alunas formadas</strong>, sou especialista em transformar iniciantes em manicures de sucesso. 
-              <br/><br/>
-              Minha missão não é apenas te ensinar a pintar unhas, é te ensinar a ter a <strong>agenda lotada</strong> e conquistar sua liberdade financeira, assim como eu fiz.
-            </p>
-            
+            <h2 className="text-3xl md:text-5xl font-bold text-gray-800 mb-6 mt-2">Aprenda com quem é <span className="text-rose-600">Referência Nacional</span></h2>
+            <p className="text-gray-600 text-lg mb-6 leading-relaxed">Com mais de <strong>5.000 alunas formadas</strong>, sou especialista em transformar iniciantes em manicures de sucesso. <br/><br/>Minha missão não é apenas te ensinar a pintar unhas, é te ensinar a ter a <strong>agenda lotada</strong> e conquistar sua liberdade financeira, assim como eu fiz.</p>
             <div className="p-4 bg-white rounded-lg border-l-4 border-rose-500 shadow-sm inline-block">
               <p className="italic text-gray-600 font-medium">"O sucesso deixa rastros, e eu vou te dar o mapa."</p>
             </div>
@@ -287,24 +292,15 @@ const LandingPage = () => {
       <section className="py-20 bg-white">
         <div className="container mx-auto px-4">
           <h2 className="text-3xl md:text-4xl font-bold text-center text-gray-800 mb-12">Elas tomaram a decisão certa 👇</h2>
-          
           <div className="grid md:grid-cols-3 gap-8">
             {[
               { name: "Juliana Mendes", role: "Manicure há 6 meses", text: "Eu trabalhava em loja de shopping e odiava. Comecei o curso com medo, mas em 2 meses já estava ganhando mais que no meu emprego antigo. Hoje tenho meu próprio cantinho!" },
               { name: "Ana Paula Silva", role: "Mãe e Empreendedora", text: "A flexibilidade de horário era tudo que eu precisava. O curso é muito didático, as aulas de cutilagem mudaram meu acabamento. Minhas clientes amam." },
               { name: "Carla Souza", role: "Dona de Esmalteria", text: "Comprei o curso para me atualizar nas técnicas de fibra e adorei. O suporte é incrível e o certificado é lindo. Vale cada centavo." }
             ].map((testimonial, idx) => (
-              <motion.div 
-                key={idx}
-                whileHover={{ scale: 1.02 }}
-                className="bg-rose-50 p-6 rounded-xl shadow-sm flex flex-col items-center text-center"
-              >
-                <div className="w-16 h-16 bg-gray-300 rounded-full mb-4 flex items-center justify-center text-xl font-bold text-gray-500">
-                  {testimonial.name.charAt(0)}
-                </div>
-                <div className="flex gap-1 text-amber-400 mb-3">
-                  {[...Array(5)].map((_, i) => <Star key={i} size={16} fill="currentColor" />)}
-                </div>
+              <motion.div key={idx} whileHover={{ scale: 1.02 }} className="bg-rose-50 p-6 rounded-xl shadow-sm flex flex-col items-center text-center">
+                <div className="w-16 h-16 bg-gray-300 rounded-full mb-4 flex items-center justify-center text-xl font-bold text-gray-500">{testimonial.name.charAt(0)}</div>
+                <div className="flex gap-1 text-amber-400 mb-3">{[...Array(5)].map((_, i) => <Star key={i} size={16} fill="currentColor" />)}</div>
                 <p className="text-gray-600 italic mb-4">"{testimonial.text}"</p>
                 <h4 className="font-bold text-gray-800">{testimonial.name}</h4>
                 <span className="text-xs text-rose-500 font-semibold">{testimonial.role}</span>
@@ -314,15 +310,12 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* 7. A OFERTA IRRESISTÍVEL (ANCORAGEM) */}
-      <section className="py-20 bg-gradient-to-br from-gray-900 to-gray-800 text-white relative overflow-hidden">
-        {/* Elementos decorativos de fundo */}
+      {/* 7. OFERTA (Adicionei ID="offer" aqui) */}
+      <section id="offer" className="py-20 bg-gradient-to-br from-gray-900 to-gray-800 text-white relative overflow-hidden">
         <div className="absolute top-0 left-0 w-64 h-64 bg-rose-600 rounded-full filter blur-[100px] opacity-20"></div>
         <div className="absolute bottom-0 right-0 w-64 h-64 bg-purple-600 rounded-full filter blur-[100px] opacity-20"></div>
 
         <div className="container mx-auto px-4 relative z-10 text-center">
-          
-          {/* Timer Regressivo */}
           <div className="bg-rose-600 inline-flex items-center gap-2 px-6 py-2 rounded-full font-mono font-bold text-xl mb-8 animate-pulse shadow-lg shadow-rose-500/30">
             <Clock size={20} />
             <span>OFERTA EXPIRA EM: {formatTime(timeLeft)}</span>
@@ -341,43 +334,38 @@ const LandingPage = () => {
             
             <p className="text-sm text-gray-500 mb-6">ou 10x de R$ 9,49 no cartão</p>
 
+            {/* BOTÃO DA OFERTA */}
             <motion.button
               whileTap={{ scale: 0.95 }}
               animate={{ scale: [1, 1.03, 1] }}
               transition={{ duration: 1.5, repeat: Infinity }}
-              onClick={handlePurchaseClick}
+              onClick={() => handlePurchaseClick('Botao_Oferta_Desconto')}
               className="w-full bg-green-500 hover:bg-green-600 text-white font-extrabold py-4 px-6 rounded-xl text-xl shadow-lg shadow-green-500/30 flex items-center justify-center gap-2 mb-4"
             >
-              SIM! QUERO MUDAR DE VIDA
+              QUERO GARANTIR MINHA VAGA
               <ChevronDown className="rotate-[-90deg]" />
             </motion.button>
 
             <div className="flex justify-center items-center gap-4 text-xs text-gray-400 grayscale opacity-70">
-              <span>💳 Cartão de Crédito</span>
-              <span>💠 Pix</span>
-              <span>📄 Boleto</span>
+              <span>💳 Cartão de Crédito</span><span>💠 Pix</span><span>📄 Boleto</span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 8. GARANTIA E FAQ */}
+      {/* 8. FAQ */}
       <section className="py-20 bg-white">
         <div className="container mx-auto px-4 max-w-4xl">
-          {/* Garantia */}
           <div className="flex flex-col md:flex-row items-center gap-6 bg-rose-50 p-8 rounded-2xl border border-rose-100 mb-16">
             <ShieldCheck size={80} className="text-rose-500 flex-shrink-0" />
             <div>
               <h3 className="text-2xl font-bold text-gray-800 mb-2">Risco Zero: Garantia de 7 Dias</h3>
-              <p className="text-gray-600">
-                Se você entrar no curso e achar que não é para você, basta nos enviar um e-mail em até 7 dias e devolvemos 100% do seu dinheiro. Sem perguntas, sem letras miúdas.
-              </p>
+              <p className="text-gray-600">Se você entrar no curso e achar que não é para você, basta nos enviar um e-mail em até 7 dias e devolvemos 100% do seu dinheiro. Sem perguntas, sem letras miúdas.</p>
             </div>
           </div>
 
-          {/* FAQ */}
           <h2 className="text-3xl font-bold text-center text-gray-800 mb-8">Perguntas Frequentes</h2>
-          <div className="space-y-4">
+          <div id="faq" className="space-y-4">
             {[
               { q: "O curso tem certificado?", a: "Sim! Após assistir todas as aulas, você poderá baixar seu certificado profissional diretamente na plataforma, pronto para imprimir." },
               { q: "Por quanto tempo tenho acesso?", a: "O acesso é VITALÍCIO. Você paga uma única vez e pode assistir às aulas quantas vezes quiser, para sempre." },
@@ -400,9 +388,7 @@ const LandingPage = () => {
                       exit={{ height: 0, opacity: 0 }}
                       className="bg-white px-5 pb-5 text-gray-600"
                     >
-                      <div className="pt-2 border-t border-gray-100 mt-2">
-                        {item.a}
-                      </div>
+                      <div className="pt-2 border-t border-gray-100 mt-2">{item.a}</div>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -423,34 +409,48 @@ const LandingPage = () => {
         </div>
       </footer>
 
-      {/* BOTÃO FLUTUANTE WHATSAPP (NOVO) */}
-      <a 
-        href={`https://wa.me/${WHATSAPP_NUMBER}?text=Oi,%20tenho%20duvidas%20sobre%20o%20curso%20de%20manicure`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="fixed bottom-24 md:bottom-8 right-4 z-40 bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-2 group border-2 border-white"
-      >
-        <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp" className="w-8 h-8 filter brightness-0 invert" />
-        <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-500 whitespace-nowrap font-bold">
-            Tirar Dúvidas
-        </span>
-      </a>
+      {/* BOTÃO WHATSAPP */}
+      <AnimatePresence>
+        {showWhatsapp && (
+          <motion.a 
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            href={`https://wa.me/${WHATSAPP_NUMBER}?text=Oi,%20tenho%20duvidas%20sobre%20o%20curso%20de%20manicure`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={handleWhatsAppClick} 
+            className="fixed bottom-24 md:bottom-8 right-4 z-40 bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-2 group border-2 border-white"
+          >
+            <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp" className="w-8 h-8 filter brightness-0 invert" />
+            <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-500 whitespace-nowrap font-bold">
+                Tirar Dúvidas
+            </span>
+          </motion.a>
+        )}
+      </AnimatePresence>
 
-      {/* BOTÃO FLUTUANTE MOBILE COMPRA (STICKY) */}
-      <motion.div 
-        initial={{ y: 100 }}
-        animate={{ y: 0 }}
-        transition={{ delay: 2 }}
-        className="fixed bottom-4 left-4 right-4 z-50 md:hidden"
-      >
-        <button 
-          onClick={handlePurchaseClick}
-          className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold py-3 rounded-lg shadow-2xl flex justify-center items-center gap-2 border-2 border-white animate-bounce"
-        >
-          QUERO COMEÇAR AGORA
-          <Check size={20} />
-        </button>
-      </motion.div>
+      {/* BOTÃO FLUTUANTE MOBILE (STICKY) */}
+      <AnimatePresence>
+        {showStickyButton && (
+          <motion.div 
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 260, damping: 20 }}
+            className="fixed bottom-4 left-4 right-4 z-50 md:hidden"
+          >
+            {/* BOTÃO STICKY COM ORIGEM DEFINIDA */}
+            <button 
+              onClick={() => handlePurchaseClick('Botao_Sticky_Mobile')}
+              className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold py-3 rounded-lg shadow-2xl flex justify-center items-center gap-2 border-2 border-white animate-bounce"
+            >
+              QUERO COMEÇAR AGORA
+              <Check size={20} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
